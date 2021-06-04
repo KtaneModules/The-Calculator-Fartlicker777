@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,285 +10,274 @@ public class TheCalculator : MonoBehaviour {
 
     public KMBombInfo Bomb;
     public KMAudio Audio;
-    public KMSelectable[] Numbers;
-    public KMSelectable[] Operators;
-    public KMSelectable[] VariablesAndShit;
+    public KMSelectable[] NumberButtons;
+    public KMSelectable[] BinaryOperators;
+    public KMSelectable[] UnaryOperators;
+    public KMSelectable[] Variables;
     public KMSelectable[] Other;
     public TextMesh ScreenButText;
-
-    string OperatorsString = "EPMTDLSrd";
-    char OperatorChar = ' ';
-    string FuckYouBlanFuckYou = "";
-    string FUkcdkflajyoublan = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    string FuckYouTwitchPlays = "0123456789";
-    int Wefuckinglovefortnite = 0;
-
-    float First = 0;
-    float Second = 0;
-    float Third = 0;
-    float Fourth = 0;
-    int Index = 0;
-
-    float XFactor = 0;
-    float YFactor = 0;
-    float ZFactor = 0;
-
-    bool Active = false;
-    bool[] VariableActivity = {false, false, false};
 
     static int moduleIdCounter = 1;
     int moduleId;
     private bool moduleSolved;
 
-    void Awake () {
+    float[] numbers = new float[2]; //Number 1, number 2
+    string[] numStrings = new string[2] { "", "" };
+    float[] cachedVariables = new float[3]; //X Y and Z
+    char cachedOperator = ' ';
+    int focused;
+    int solution;
+    bool willClear;
+
+    void Awake ()
+    {
         moduleId = moduleIdCounter++;
+        foreach (KMSelectable number in NumberButtons)
+            number.OnInteract += delegate () { ButtonPress(number); NumPress(Array.IndexOf(NumberButtons, number)); return false; };
+        foreach (KMSelectable op in UnaryOperators)
+            op.OnInteract += delegate () { ButtonPress(op); UnaryPress(Array.IndexOf(UnaryOperators, op)); return false; };
+        foreach (KMSelectable op in BinaryOperators)
+            op.OnInteract += delegate () { ButtonPress(op); BinaryPress(Array.IndexOf(BinaryOperators, op)); return false; };
+        foreach (KMSelectable extra in Other)
+            extra.OnInteract += delegate () { ButtonPress(extra); OtherPress(Array.IndexOf(Other, extra)); return false; };
+        foreach (KMSelectable variable in Variables)
+            variable.OnInteract += delegate () { ButtonPress(variable); VarPress(Array.IndexOf(Variables, variable)); return false; };
+    }
 
-        foreach (KMSelectable Number in Numbers) {
-            Number.OnInteract += delegate () { NumberPress(Number); return false; };
+    void Start()
+    {
+        foreach (char letter in Bomb.GetSerialNumber())
+            solution += "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".IndexOf(letter);
+        Debug.LogFormat("[The Calculator #{0}] The serial number sum in base-36 is {1}.", moduleId, solution);
+    }
+
+    void ButtonPress(KMSelectable button)
+    {
+        button.AddInteractionPunch(0.1f);
+        Audio.PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.ButtonPress, button.transform);
+    }
+
+    void NumPress(int num)
+    {
+        if (willClear) numStrings[focused] = "";
+        numStrings[focused] = (numStrings[focused] + num).TakeLast(18).Join("");
+        ScreenButText.text = numStrings[focused];
+        numbers[focused] = float.Parse(numStrings[focused]);
+        willClear = false;
+    }
+    void UnaryPress(int op)
+    {
+        cachedOperator = ' ';
+        switch (op)
+        {
+            case 0: numbers[focused] = Mathf.Pow(numbers[focused], 2); break; //Square
+            case 1: numbers[focused] = Mathf.Pow(numbers[focused], 0.5f); break; //Sqrt
+            case 2: numbers[focused] = DigiRoot(numbers[focused]); break; //DR
+            case 3: numbers[focused] *= -1; break; //Negative
         }
-        foreach (KMSelectable Operator in Operators) {
-            Operator.OnInteract += delegate () { OperatorPress(Operator); return false; };
+        numStrings[focused] = numbers[focused].ToString();
+        ScreenButText.text = numStrings[focused];
+        if (op != 3)
+            willClear = true;
+
+    }
+    void BinaryPress(int index)
+    {
+        willClear = false;
+        if (focused == 1 && numStrings[1] != "") //If there's already an expression inputted, evaluate it
+            EvalutateCurrent();
+        cachedOperator = "+-*/%"[index];
+        focused = 1;
+    }
+    void VarPress(int index)
+    {
+        if (cachedOperator == ' ' && numStrings[focused] != "") //If the display is not empty and we haven't entered an operator, store the display, otherwise display that variable.
+        {
+            Debug.LogFormat("variable {0} stored", "xyz"[index]);
+            cachedVariables[index] = numbers[focused]; //Store
+            willClear = true;
         }
-        foreach (KMSelectable Variable in VariablesAndShit) {
-            Variable.OnInteract += delegate () { VariablePress(Variable); return false; };
+        else
+        {
+            Debug.LogFormat("variable {0} recalled", "xyz"[index]);
+            numbers[focused] = cachedVariables[index]; //Recall
+            numStrings[focused] = numbers[focused].ToString();
+            ScreenButText.text = numStrings[focused];
         }
-        foreach (KMSelectable Oth in Other) {
-            Oth.OnInteract += delegate () { OthPress(Oth); return false; };
+    }
+    void OtherPress(int index)
+    {
+        switch (index)
+        {
+            case 0: EvalutateCurrent(); break; //Equals button
+            case 1: if (numbers[focused] == solution) GetComponent<KMBombModule>().HandlePass(); break; //Solve button
+            case 2: //Delete button
+                numStrings[focused] = numStrings[focused].Take(numStrings[focused].Length - 1).Join("");
+                numbers[focused] = (numStrings[focused] == "" || numStrings[focused] == "-")
+                    ? 0
+                    : float.Parse(numStrings[focused]);
+                ScreenButText.text = numStrings[focused];
+                break;
+            case 3: //Clear button
+                numbers[0] = 0;
+                numbers[1] = 0;
+                numStrings[0] = "";
+                numStrings[1] = "";
+                ScreenButText.text = "";
+                break;
+            case 4: //Decimal point;
+                if (numStrings[focused].Contains('.'))
+                    break;
+                if (numStrings[focused] == "") numStrings[focused] = "0";
+                numStrings[focused] = (numStrings[focused] + '.').TakeLast(18).Join("");
+                ScreenButText.text = numStrings[focused];
+                numbers[focused] = float.Parse(numStrings[focused]);
+                willClear = false;
+                break;
+            default: break;
         }
     }
 
-    void Start(){
-      FuckYouBlanFuckYou = Bomb.GetSerialNumber();
-      for (int j = 0; j < 6; j++) {
-        for (int i = 0; i < FUkcdkflajyoublan.Length; i++) {
-          if (FuckYouBlanFuckYou[j].ToString() == FUkcdkflajyoublan[i].ToString()) {
-            Wefuckinglovefortnite += i;
-          }
-        }
-      }
-      Debug.LogFormat("[The Calculator #{0}] The sum of the serial number digits in base 10 is {1}.", moduleId, Wefuckinglovefortnite);
+    void EvalutateCurrent()
+    {
+        numbers[0] = PerformOp(numbers[0], numbers[1], cachedOperator);
+        focused = 0;
+        cachedOperator = ' ';
+        numStrings[0] = numbers[0].ToString();
+        numbers[1] = 0;
+        numStrings[1] = "";
+        ScreenButText.text = numStrings[0];
+        willClear = true;
+        
     }
 
-    void NumberPress(KMSelectable Number){
-      Audio.PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.ButtonPress, Number.transform);
-      Number.AddInteractionPunch();
-      for (int i = 0; i < 10; i++) {
-        if (Number == Numbers[i]) {
-          if (VariableActivity[0] == true) {
-            XFactor *= 10 + 1;
-            ScreenButText.text = XFactor.ToString();
-          }
-          else if (VariableActivity[1] == true) {
-            YFactor *= 10 + 1;
-            ScreenButText.text = YFactor.ToString();
-          }
-          else if (VariableActivity[2] == true) {
-            ZFactor *= 10 + 1;
-            ScreenButText.text = ZFactor.ToString();
-          }
-          else if (Active == false) {
-            First = First * 10 + i;
-            ScreenButText.text = First.ToString();
-          }
-          else {
-            Second = Second * 10 + i;
-            ScreenButText.text = Second.ToString();
-          }
+    float PerformOp(float ONE, float TWO, char op)
+    {
+        switch (op)
+        {
+            case '+': return ONE + TWO;
+            case '-': return ONE - TWO;
+            case '*': return ONE * TWO;
+            case '/':
+                if (TWO == 0)
+                {
+                    StartCoroutine(DisplayError());
+                    return 0;
+                }
+                else return ONE / TWO;
+            case '%':
+                if (TWO == 0)
+                {
+                    StartCoroutine(DisplayError());
+                    return 0;
+                }
+                else return (ONE % TWO + TWO) % TWO;
+            default: return ONE;
         }
-      }
     }
 
-    void OperatorPress(KMSelectable Operator){
-      Audio.PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.ButtonPress, Operator.transform);
-      Operator.AddInteractionPunch();
-      for (int i = 0; i < 9; i++) {
-        if (Operator == Operators[i]) {
-          Active = true;
-          OperatorChar = OperatorsString[i];
-          switch (OperatorChar) {
-            case 'S':
-            First *= First;
-            ScreenButText.text = (First).ToString();
-            break;
-            case 'd':
-            First = (First - 1) % 9 + 1;
-            ScreenButText.text = (First).ToString();
-            break;
-            case 'r':
-            First = (float) Math.Sqrt(First);
-            ScreenButText.text = First.ToString();
-            break;
-          }
-        }
-      }
+    float DigiRoot(float input)
+    {
+        do
+        {
+            var digits = input.ToString().Where(x => x != '.' && x != '-').Select(x => x - '0');
+            input = 0;
+            foreach (int digit in digits)
+                input += digit;
+        } while (input > 9);
+        return input;
     }
 
-    void VariablePress(KMSelectable Variable){
-      Audio.PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.ButtonPress, Variable.transform);
-      Variable.AddInteractionPunch();
-      /*for (int i = 0; i < 3; i++) {
-        if (Variable == VariablesAndShit[i]) {
-          if (First == 1) {
-            switch (i) {
-              case 0:
-              ScreenButText.text = "X";
-              VariableActivity[0] = true;
-              VariableActivity[1] = false;
-              VariableActivity[2] = false;
-              break;
-              case 1:
-              ScreenButText.text = "Y";
-              VariableActivity[0] = false;
-              VariableActivity[1] = true;
-              VariableActivity[2] = false;
-              break;
-              case 2:
-              ScreenButText.text = "Z";
-              VariableActivity[0] = false;
-              VariableActivity[1] = false;
-              VariableActivity[2] = true;
-              break;
-            }
-          }
-          else {
-            if (i == 0) {
-              ScreenButText.text = XFactor.ToString();
-            }
-            else if (i == 1) {
-              ScreenButText.text = YFactor.ToString();
-            }
-            else if (i == 2) {
-              ScreenButText.text = ZFactor.ToString();
-            }
-          }
-        }
-      }*/
-    }
-
-    void OthPress(KMSelectable Oth){
-      Audio.PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.ButtonPress, Oth.transform);
-      Oth.AddInteractionPunch();
-      for (int i = 0; i < 5; i++) {
-        if (Oth == Other[i]) {
-          switch (i) {
-            case 0:
-            return;
-            break;
-            case 1:
-            switch (OperatorChar) {
-              /*case 'E':
-              for (int j = 0; j < 3; j++) {
-                VariableActivity[j] = false;
-              }
-              break;*/
-              case 'P':
-              ScreenButText.text = (First + Second).ToString();
-              break;
-              case 'M':
-              ScreenButText.text = (First - Second).ToString();
-              break;
-              case 'T':
-              ScreenButText.text = (First * Second).ToString();
-              break;
-              case 'D':
-              if (Second == 0) {
-                ScreenButText.text = "Error!";
-              }
-              else {
-                ScreenButText.text = (First / Second).ToString();
-              }
-              break;
-              case 'L':
-              ScreenButText.text = (First % Second).ToString();
-              break;
-            }
-            Active = false;
-            First = 0;
-            Second = 0;
-            break;
-            case 2:
-            if (First == Wefuckinglovefortnite) {
-              GetComponent<KMBombModule>().HandlePass();
-            }
-            First = 0;
-            Second = 0;
-            ScreenButText.text = "8888888888888.8";
-            Active = false;
-            break;
-            case 3:
-            if (Active == true) {
-              Second = (Second / 10) - ((Second / 10) % 1);
-              ScreenButText.text = Second.ToString();
-            }
-            else {
-              First = (First / 10) - ((First / 10) % 1);
-              ScreenButText.text = First.ToString();
-            }
-            break;
-            case 4:
-            First = 0;
-            Second = 0;
-            ScreenButText.text = "8888888888888.8";
-            Active = false;
-            break;
-          }
-        }
-      }
+    IEnumerator DisplayError()
+    {
+        yield return null;
+        numbers[0] = 0;
+        numStrings[0] = "";
+        numbers[1] = 0;
+        numStrings[1] = "";
+        ScreenButText.text = "ERROR";
     }
 
     #pragma warning disable 414
-    private readonly string TwitchHelpMessage = @"Use !{0} # to submit a number.";
+    private readonly string TwitchHelpMessage = @"Use <!{0} 63 solve> to enter 63 and press the solve button. Use <!{0} 2 + 2 = > to press those buttons. Substitute √ with sqrt, ² with sq. Square roots, digital roots, and negatives must come before their parameters.";
     #pragma warning restore 414
 
-    IEnumerator ProcessTwitchCommand(string command){
-
-        for (int i = 0; i < command.Length; i++) {
-            if (command[i] == '0') {
-              Numbers[0].OnInteract();
-              yield return new WaitForSeconds(.1f);
+    IEnumerator ProcessTwitchCommand(string command)
+    {
+        command = command.Trim().ToUpperInvariant();
+        List<string> parameters = command.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).ToList();
+        List<KMSelectable> inputs = new List<KMSelectable>();
+        string[] ALLCOMMANDS = "0123456789.=C+-*/%XYZ<²√".Select(x => x.ToString()).Concat(new string[] { "DR", "SQRT", "DEL", "CLR", "CLEAR", "DELETE", "SOLVE", "SUBMIT", "^2" }).ToArray();
+        if (parameters.All(x => ALLCOMMANDS.Contains(x) || x.All(ch => "0123456789.-".Contains(ch))))
+        {
+            bool sqrt = false;
+            bool dr = false;
+            foreach (string param in parameters)
+            {
+                if (param == "SQRT" || param == "√")
+                    sqrt = true;
+                if (param == "DR")
+                    dr = true;
+                if (param.All(x => "0123456789.-".Contains(x)))
+                {
+                    bool negating = false;
+                    yield return null;
+                    foreach (char digit in param)
+                    {
+                        if ("0123456789".Contains(digit))
+                            inputs.Add(NumberButtons[digit - '0']);
+                        else if (digit == '.')
+                            inputs.Add(Other[4]);
+                        else negating = !negating;
+                    }
+                    if (negating)
+                        inputs.Add(UnaryOperators[3]);
+                    if (sqrt)
+                        inputs.Add(UnaryOperators[1]);
+                    if (dr)
+                        inputs.Add(UnaryOperators[2]);
+                    sqrt = false;
+                    dr = false;
+                }
+                else if ("+-*/%".Contains(param))
+                    inputs.Add(BinaryOperators["+-*/%".IndexOf(param)]);
+                else
+                {
+                    switch (param)
+                    {
+                        case "SQ": case "^2": case "²": inputs.Add(UnaryOperators[0]); break;
+                        case "=": inputs.Add(Other[0]); break;
+                        case "<": case "DEL": case "D": inputs.Add(Other[2]); break;
+                        case "C": case "CLR": case "CLEAR": inputs.Add(Other[3]); break;
+                        case "SOLVE": case "SUBMIT": inputs.Add(Other[1]); break;
+                        case "X": inputs.Add(Variables[0]); break;
+                        case "Y": inputs.Add(Variables[1]); break;
+                        case "Z": inputs.Add(Variables[2]); break;
+                        default: break;
+                    }
+                }
             }
-            else if (command[i] == '1') {
-              Numbers[1].OnInteract();
-              yield return new WaitForSeconds(.1f);
-            }
-            else if (command[i] == '2') {
-              Numbers[2].OnInteract();
-              yield return new WaitForSeconds(.1f);
-            }
-            else if (command[i] == '3') {
-              Numbers[3].OnInteract();
-              yield return new WaitForSeconds(.1f);
-            }
-            else if (command[i] == '4') {
-              Numbers[4].OnInteract();
-              yield return new WaitForSeconds(.1f);
-            }
-            else if (command[i] == '5') {
-              Numbers[5].OnInteract();
-              yield return new WaitForSeconds(.1f);
-            }
-            else if (command[i] == '6') {
-              Numbers[6].OnInteract();
-              yield return new WaitForSeconds(.1f);
-            }
-            else if (command[i] == '7') {
-              Numbers[7].OnInteract();
-              yield return new WaitForSeconds(.1f);
-            }
-            else if (command[i] == '8') {
-              Numbers[8].OnInteract();
-              yield return new WaitForSeconds(.1f);
-            }
-            else if (command[i] == '9') {
-              Numbers[9].OnInteract();
-              yield return new WaitForSeconds(.1f);
-            }
-            else {
-              yield return "sendtochaterror Not a number!";
-              Other[4].OnInteract();
-              yield break;
+            yield return null;
+            Debug.Log(inputs.Select(x => x.name).Join(", "));
+            foreach (KMSelectable button in inputs)
+            {
+                button.OnInteract();
+                yield return new WaitForSeconds(0.1f);
             }
         }
-        Other[2].OnInteract();
+    }
+    IEnumerator TwitchHandleForcedSolve()
+    {
+        if (numbers[focused] != 0)
+        {
+            Other[3].OnInteract();
+            yield return new WaitForSeconds(0.1f);
+        }
+        foreach (char digit in solution.ToString())
+        {
+            NumberButtons[digit - '0'].OnInteract();
+            yield return new WaitForSeconds(0.1f);
+        }
+        Other[1].OnInteract();
     }
 }
