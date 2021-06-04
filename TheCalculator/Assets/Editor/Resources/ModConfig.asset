@@ -14,7 +14,18 @@ MonoBehaviour:
   id: TheCalculator
   title: The Calculator
   author: Me
-  description: For once the bomb makers have decided to throw you a bone.
+  description: 'For once the bomb makers have decided to throw you a bone.
+
+
+    Input the sum of the serial number characters into the module, and then you have
+    a fully functional calculator.
+
+
+    Manual can be found at ktane.timwi.de or in the manuals folder of your game.
+
+
+    If there are any bugs (tbh I doubt it for this one in particular), contact Fartlicker777#9169
+    on Discord.'
   version: 
   outputFolder: build
-  previewImage: {fileID: 2800000, guid: 0fd3e6eef080f0947a491d58b172da51, type: 3}
+  previewImage: {fileID: 2800000, guid: b8bd401d63de5a8408065a1263b96a30, type: 3}
