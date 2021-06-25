@@ -7817,7 +7817,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   ModuleType: TheCalculator
-  ModuleDisplayName: TheCalculator
+  ModuleDisplayName: The Calculator
   RequiresTimerVisibility: 0
 --- !u!114 &114854275103598248
 MonoBehaviour:
